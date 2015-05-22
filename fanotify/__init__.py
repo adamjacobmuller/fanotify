@@ -169,9 +169,12 @@ class fanotify_event:
         return "<fanotify_event for%s %s by %d%s>" % (delstr, self.filename, self.pid, cmdstr)
 
 
-if __name__ == "__main__":
+def main():
     x = fanotify()
     x.init()
     x.mark("/", mount=True, close_write=True)
     for event in x.read():
         print "%s" % event
+
+if __name__ == "__main__":
+    main()
