@@ -5,7 +5,7 @@ import os
 from ctypes.util import find_library
 
 
-class fanotify_event_metadata(ctypes.Structure):
+class FanotifyEventMetadata(ctypes.Structure):
     _fields_ = [
         ('event_len', ctypes.c_uint32),
         ('vers', ctypes.c_uint8),
@@ -17,7 +17,7 @@ class fanotify_event_metadata(ctypes.Structure):
     ]
 
 
-class fanotify:
+class Fanotify:
     FAN_ACCESS = 1
     FAN_MODIFY = 2
     FAN_CLOSE_WRITE = 8
@@ -87,14 +87,15 @@ class fanotify:
         )
     ]
 
-    def __init__(self):
+    def __init__(self, nonblock=False, 
+                       unlimited_queue=False,
+                       unlimited_marks=False,
+                       get_process_names=True):
         self.libc = ctypes.cdll.LoadLibrary(find_library("c"))
-        self.nonblock = False
-        self.unlimited_queue = False
-        self.unlimited_marks = False
-        self.get_process_names = True
-
-    def init(self):
+        self.nonblock = nonblock
+        self.unlimited_queue = unlimited_queue
+        self.unlimited_marks = unlimited_marks
+        self.get_process_names = get_process_names
         flags = self.FAN_CLOEXEC
         event_flags = 0
         self.fd = self.libc.fanotify_init(flags, event_flags)
@@ -115,42 +116,39 @@ class fanotify:
                 mask_enabled = kwargs[mask['name']]
             if mask_enabled is True:
                 masks = masks | mask['value']
-
         rc = self.libc.fanotify_mark(self.fd, flags, masks, 0, path)
 
-    def read(self):
+    def read(self, debug=False):
         while True:
             data = os.read(self.fd, 24)
             bb = ctypes.create_string_buffer(data)
-            metadata = fanotify_event_metadata()
+            metadata = FanotifyEventMetadata()
             ctypes.memmove(ctypes.addressof(metadata), ctypes.addressof(bb), len(data))
-            #print "event_len: %d" % metadata.event_len
-            #print "vers: %d" % metadata.vers
-            #print "fd: %d" % metadata.fd
-            #print "pid: %d" % metadata.pid
-
             filename = os.readlink("/proc/self/fd/%d" % (metadata.fd))
             if filename[-10:] == " (deleted)":
                 deleted = True
                 filename = filename[:-10]
             else:
                 deleted = False
-            #print "filename: %s" % filename
             try:
                 cmdline_fh = open("/proc/%d/cmdline" % metadata.pid, "r")
                 cmdline = cmdline_fh.read()
                 cmdline = cmdline.split(chr(0))
             except IOError:
                 cmdline = None
-
-            #print "cmdline: %s" % (cmdline)
+            if debug:
+                print "event_len: %d" % metadata.event_len
+                print "vers: %d" % metadata.vers
+                print "fd: %d" % metadata.fd
+                print "pid: %d" % metadata.pid
+                print "filename: %s" % filename
+                print "cmdline: %s" % (cmdline)
+                print "--------------------------------------------------------------------"
             os.close(metadata.fd)
-            #print "--------------------------------------------------------------------"
-
-            yield fanotify_event(metadata.pid, filename, cmdline, deleted=deleted)
+            yield FanotifyEvent(metadata.pid, filename, cmdline, deleted=deleted)
 
 
-class fanotify_event:
+class FanotifyEvent:
     def __init__(self, pid=None, filename=None, cmdline=None, deleted=False):
         self.pid = pid
         self.filename = filename
@@ -170,8 +168,7 @@ class fanotify_event:
 
 
 def main():
-    x = fanotify()
-    x.init()
+    x = Fanotify()
     x.mark("/", mount=True, close_write=True)
     for event in x.read():
         print "%s" % event
