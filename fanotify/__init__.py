@@ -97,6 +97,12 @@ class Fanotify:
         self.unlimited_marks = unlimited_marks
         self.get_process_names = get_process_names
         flags = self.FAN_CLOEXEC
+        if self.unlimited_queue: 
+            flags = flags | self.FAN_UNLIMITED_QUEUE
+        if self.unlimited_marks:
+            flags = flags | self.FAN_UNLIMITED_MARKS
+        if self.nonblock: 
+            flags = flags | self.FAN_NONBLOCK
         event_flags = 0
         self.fd = self.libc.fanotify_init(flags, event_flags)
 
