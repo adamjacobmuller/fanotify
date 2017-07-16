@@ -126,7 +126,12 @@ class Fanotify:
 
     def read(self, debug=False):
         while True:
-            data = os.read(self.fd, 24)
+            try:
+                data = os.read(self.fd, 24)
+            except OSError:
+                if debug:
+                    print "Caught os error."
+                continue
             bb = ctypes.create_string_buffer(data)
             metadata = FanotifyEventMetadata()
             ctypes.memmove(ctypes.addressof(metadata), ctypes.addressof(bb), len(data))
